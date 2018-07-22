@@ -75,7 +75,7 @@ GameObject:
   - component: {fileID: 114966948930961302}
   - component: {fileID: 114946451235526864}
   m_Layer: 5
-  m_Name: CgShell
+  m_Name: cgShell
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

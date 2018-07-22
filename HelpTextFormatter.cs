@@ -72,20 +72,20 @@ public class HelpTextFormatter {
         List<Help> posHelps = new List<Help>();
 
         int maxArgHelpWidth = -1;
-        foreach(OptionDescriptor opt in command.OptionalArgs) {
+        foreach(OptionDescriptor optDesc in command.OptionalArgs) {
             Help help = new Help(); 
-            help.argHelp = ArgHelp(opt);
-            help.help = opt.HelpText;
+            help.argHelp = ArgHelp(optDesc);
+            help.help = optDesc.HelpText;
             optHelps.Add(help);
 
             int argHelpWidth = StringWidth(help.argHelp);
             if(argHelpWidth > maxArgHelpWidth)
                 maxArgHelpWidth = argHelpWidth;
         }
-        foreach(ArgDescriptor pos in command.PositionalArgs) {
+        foreach(ArgDescriptor posDesc in command.PositionalArgs) {
             Help help = new Help(); 
-            help.argHelp = ArgHelp(pos);
-            help.help = pos.HelpText;
+            help.argHelp = ArgHelp(posDesc);
+            help.help = posDesc.HelpText;
             posHelps.Add(help);
 
             int argHelpWidth = StringWidth(help.argHelp);
@@ -248,22 +248,22 @@ public class HelpTextFormatter {
 
         sb.Append("\n\nPositional arguments\n"
             + "------------------------\n");
-        foreach(ArgDescriptor pos in command.PositionalArgs) {
-            sb.Append(ArgHelp(pos));
-            if(pos.HelpText.Length > 0) {
+        foreach(ArgDescriptor posDesc in command.PositionalArgs) {
+            sb.Append(ArgHelp(posDesc));
+            if(posDesc.HelpText.Length > 0) {
                 sb.Append('\n');
-                sb.Append(pos.HelpText);
+                sb.Append(posDesc.HelpText);
             }
             sb.Append("\n\n");
         }
 
         sb.Append("\nOptional arguments\n"
             + "------------------------\n");
-        foreach(OptionDescriptor opt in command.OptionalArgs) {
-            sb.Append(ArgHelp(opt));
-            if(opt.HelpText.Length > 0) {
+        foreach(OptionDescriptor optDesc in command.OptionalArgs) {
+            sb.Append(ArgHelp(optDesc));
+            if(optDesc.HelpText.Length > 0) {
                 sb.Append('\n');
-                sb.Append(opt.HelpText);
+                sb.Append(optDesc.HelpText);
             }
             sb.Append("\n\n");
         }
@@ -284,35 +284,35 @@ public class HelpTextFormatter {
      * @param arg: the arg to use to generate the arg help
      * @returns an arg help string
      */
-    private static string ArgHelp(ArgDescriptor arg) {
+    private static string ArgHelp(ArgDescriptor argDesc) {
 
         StringBuilder sb = new StringBuilder(200);
 
         //print name first
-        OptionDescriptor asOpt = arg as OptionDescriptor;
+        OptionDescriptor asOpt = argDesc as OptionDescriptor;
         if(asOpt != null && asOpt.ShortName != ' ')
             sb.Append(string.Format("--{0}|-{1}", asOpt.LongName, asOpt.ShortName));
         else if(asOpt != null)
-            sb.Append(string.Format("--{0}", arg.LongName));
+            sb.Append(string.Format("--{0}", argDesc.LongName));
 
         //arg array
-        if(arg.Data.SysType.IsArray) {
+        if(argDesc.Data.SysType.IsArray) {
             
             //well formed is easy
-            if(arg.IsWellDefined) {
-                for(int i = 0; i < arg.MinArgs; i++)
-                    sb.Append(string.Format(" {0}_{1}", arg.LongName.ToUpper(), i));
+            if(argDesc.IsWellDefined) {
+                for(int i = 0; i < argDesc.MinArgs; i++)
+                    sb.Append(string.Format(" {0}_{1}", argDesc.LongName.ToUpper(), i));
             }
             //non-well-formed requires more care to print min args, then ... if no max, or parenthesized max
             else {
-                int min = arg.MinArgs;
-                int max = arg.MaxArgs;
+                int min = argDesc.MinArgs;
+                int max = argDesc.MaxArgs;
                 for(int i = 0; i < min; i++)
-                    sb.Append(string.Format(" {0}_{1}", arg.LongName.ToUpper(), i));
+                    sb.Append(string.Format(" {0}_{1}", argDesc.LongName.ToUpper(), i));
 
                 if(max >= 0) {
                     for(int i = 0; i < max-min; i++)
-                        sb.Append(string.Format(" {0}_{1}", arg.LongName.ToUpper(), i));
+                        sb.Append(string.Format(" {0}_{1}", argDesc.LongName.ToUpper(), i));
                 }
                 else {
                     sb.Append(" ...");
@@ -320,8 +320,8 @@ public class HelpTextFormatter {
             }
         }
         //bools don't have to print the argument (but they can take one)
-        else if(arg.Data.SysType != typeof(bool))
-            sb.Append(string.Format(" {0}", arg.LongName.ToUpper()));
+        else if(argDesc.Data.SysType != typeof(bool))
+            sb.Append(string.Format(" {0}", argDesc.LongName.ToUpper()));
 
 
         return sb.ToString();
@@ -344,14 +344,14 @@ public class HelpTextFormatter {
         sb.Append("usage: ");
         sb.Append(cmd.Predicate);
 
-        foreach(OptionDescriptor opt in cmd.OptionalArgs) {
+        foreach(OptionDescriptor optDesc in cmd.OptionalArgs) {
             sb.Append(" [");
-            sb.Append(ArgHelp(opt));
+            sb.Append(ArgHelp(optDesc));
             sb.Append("]");
         }
-        foreach(ArgDescriptor pos in cmd.PositionalArgs) {
+        foreach(ArgDescriptor posDesc in cmd.PositionalArgs) {
             sb.Append(' ');
-            sb.Append(ArgHelp(pos));
+            sb.Append(ArgHelp(posDesc));
         }
         return sb.ToString();
     }

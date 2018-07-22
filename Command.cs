@@ -27,14 +27,12 @@ public class Command {
     //predicate usually used to reference this command when it's a sub command
     public string Predicate{ get; protected set;}
 
-    //NOTE: the below data structure define the parsedOptions/parsedPositionals for this command,
-    //they do NOT store any significant data outside of default values.
-    private Dictionary<string, ArgDescriptor> Options{ get; set; }
-    private Dictionary<string, ArgDescriptor> Positionals{ get; set; }
-    private LinkedList<ArgDescriptor> PositionalsList{ get; set; } //duplicate data helps maintain ordering
+    private Dictionary<string, ArgDescriptor> OptDescriptors{ get; set; } //option descriptors
+    private Dictionary<string, ArgDescriptor> PosDescriptors{ get; set; } //positional descriptors
+    private LinkedList<ArgDescriptor> PosDescriptorsList{ get; set; } //duplicate data helps maintain ordering
 
-    public IEnumerable<ArgDescriptor> PositionalArgs{ get { return PositionalsList; } }
-    public IEnumerable<ArgDescriptor> OptionalArgs{ get { return Options.Values.Distinct(); } }
+    public IEnumerable<ArgDescriptor> PositionalArgs{ get { return PosDescriptorsList; } }
+    public IEnumerable<ArgDescriptor> OptionalArgs{ get { return OptDescriptors.Values.Distinct(); } }
 
     private HelpTextFormatter _formatter;
     public HelpTextFormatter Formatter{ 
@@ -55,9 +53,9 @@ public class Command {
      */
     public Command(string predicate="", HelpTextFormatter formatter = null) {
         Predicate = predicate;
-        Positionals = new Dictionary<string, ArgDescriptor>();
-        PositionalsList = new LinkedList<ArgDescriptor>();
-        Options = new Dictionary<string, ArgDescriptor>();
+        PosDescriptors = new Dictionary<string, ArgDescriptor>();
+        PosDescriptorsList = new LinkedList<ArgDescriptor>();
+        OptDescriptors = new Dictionary<string, ArgDescriptor>();
 
         SubCommands = new Dictionary<string, Command>();
 
@@ -94,7 +92,7 @@ public class Command {
         Dictionary<string, ArgData> copiedDict =
             new Dictionary<string, ArgData>();
 
-        Dictionary<string, ArgDescriptor> sourceDict = (getOptions == true) ? Options : Positionals;
+        Dictionary<string, ArgDescriptor> sourceDict = (getOptions == true) ? OptDescriptors : PosDescriptors;
 
         foreach(KeyValuePair<string, ArgDescriptor> kvPair in sourceDict) {
             if(alreadyCopiedRefs.ContainsKey(kvPair.Value.Data)) {
@@ -112,60 +110,60 @@ public class Command {
     /**
      * Adds multiple options without the option to
      * add reference names
-     * @param opts: a params array of OptionDescriptor
+     * @param optDescriptors: a params array of OptionDescriptor
      */
-    public void AddOption(params OptionDescriptor[] opts) {
-        foreach(OptionDescriptor opt in opts)
-            AddOption(opt);
+    public void AddOption(params OptionDescriptor[] optDescriptors) {
+        foreach(OptionDescriptor optDesc in optDescriptors)
+            AddOption(optDesc);
     }
 
     /**
      * Adds an optional to the options set.
-     * @param opt: the option to add
+     * @param optDesc: the description of the option to add
      * @param refName: an extra name to reference the option by after parsing.
      *  Is ignored if the reference name is "". (default: "")
      */
-    public void AddOption(OptionDescriptor opt, string refName="") {
+    public void AddOption(OptionDescriptor optDesc, string refName="") {
 
         //check if well-formed
-        if(!ValidOption(opt))
+        if(!ValidOption(optDesc))
             return;
 
         //add references as refName, long name, and short name
         if(refName != "" && ValidRefName(refName, true))
-            Options.Add(refName, opt);
+            OptDescriptors.Add(refName, optDesc);
 
-        Options.Add(opt.LongName, opt);
-        if(opt.ShortName != ' ')
-            Options.Add(opt.ShortName.ToString(), opt);
+        OptDescriptors.Add(optDesc.LongName, optDesc);
+        if(optDesc.ShortName != ' ')
+            OptDescriptors.Add(optDesc.ShortName.ToString(), optDesc);
     }
 
     /**
      * Adds multiple positionals without the option to
      * add reference names
-     * @param args: a params array of ArgDescriptor
+     * @param argDescriptors: a params array of ArgDescriptor
      */
-    public void AddPositional(params ArgDescriptor[] args){ 
-        foreach(ArgDescriptor arg in args)
-            AddPositional(arg);
+    public void AddPositional(params ArgDescriptor[] argDescriptors){ 
+        foreach(ArgDescriptor argDesc in argDescriptors)
+            AddPositional(argDesc);
     }
 
     /**
      * Adds an optional to the options set.
-     * @param opt: the option to add
+     * @param argDesc: the arg descriptor to use to add a positional
      * @param refName: an extra name to reference the argument by after parsing.
      *  Is ignored if the reference name is "". (default: "")
      */
-    public void AddPositional(ArgDescriptor arg, string refName = "") {
-        if(!ValidPositional(arg))
+    public void AddPositional(ArgDescriptor argDesc, string refName = "") {
+        if(!ValidPositional(argDesc))
             return;
         
         //add references as refName, long name, and short name
         if(refName != "" && ValidRefName(refName, false))
-            Positionals.Add(refName, arg);
+            PosDescriptors.Add(refName, argDesc);
 
-        Positionals.Add(arg.LongName, arg);
-        PositionalsList.AddLast(arg);
+        PosDescriptors.Add(argDesc.LongName, argDesc);
+        PosDescriptorsList.AddLast(argDesc);
     }
 
     /***************************************************************
@@ -174,12 +172,12 @@ public class Command {
 
     bool ValidRefName(string refName, bool isOptional) {
 
-        Dictionary<string, ArgDescriptor> argDict = (isOptional) ? Options : Positionals;
-        if(argDict.ContainsKey(refName)) {
+        Dictionary<string, ArgDescriptor> argDescDict = (isOptional) ? OptDescriptors : PosDescriptors;
+        if(argDescDict.ContainsKey(refName)) {
             WriteWarning(string.Format("Unable to add reference name '{0}'"
                     + " again because reference name already used"
                     + " by {1}", 
-                    refName, argDict[refName].LongName));
+                    refName, argDescDict[refName].LongName));
             return false;
         }
         return true;
@@ -188,17 +186,17 @@ public class Command {
     /**
      * Checks if a positional argument is valid to add. 
      * 
-     * @param positional: the ArgDescriptor to check
+     * @param posDesc: the descriptor to check
      * @returns true if valid, false otherwise
      */
-    private bool ValidPositional(ArgDescriptor positional) {
+    private bool ValidPositional(ArgDescriptor posDesc) {
 
-        if(!ValidArg(positional, false))
+        if(!ValidArg(posDesc, false))
             return false;
 
         //list mpositional must be added last
         bool containsListPositional = false;
-        LinkedListNode<ArgDescriptor> lastPosNode = PositionalsList.Last;
+        LinkedListNode<ArgDescriptor> lastPosNode = PosDescriptorsList.Last;
         if(lastPosNode != null 
             && lastPosNode.Value.Data.SysType.IsArray
             && !lastPosNode.Value.IsWellDefined) {
@@ -210,7 +208,7 @@ public class Command {
             WriteWarning(string.Format(
                 "Invalid positional arg {0}. There may only be one positional"
                 + " list argument without a well-defined length and it must be added as the last"
-                + " positional argument.", positional.LongName));
+                + " positional argument.", posDesc.LongName));
             return false;
         }
 
@@ -220,28 +218,28 @@ public class Command {
     /**
      * Checks if an optional argument can be added.
      *
-     * @param opt: the option to check
+     * @param optDesc: the descriptor to check
      * @returns true if valid to add, false otherwise
      */
-    private bool ValidOption(OptionDescriptor opt) {
+    private bool ValidOption(OptionDescriptor optDesc) {
         
-        if(!ValidArg(opt, true))
+        if(!ValidArg(optDesc, true))
             return false;
 
         //short names must be unique letter for optional opt
-        if(opt.ShortName != ' ') {
-            if(!char.IsLetter(opt.ShortName)) {
+        if(optDesc.ShortName != ' ') {
+            if(!char.IsLetter(optDesc.ShortName)) {
                 WriteWarning(string.Format("Invalid optional"
                     + " with long name '{0}'"
-                    + " has non-letter short name '{1}'", opt.LongName, opt.ShortName));
+                    + " has non-letter short name '{1}'", optDesc.LongName, optDesc.ShortName));
                 return false;
             }
-            else if(Options.ContainsKey(opt.ShortName.ToString())) {
+            else if(OptDescriptors.ContainsKey(optDesc.ShortName.ToString())) {
                 WriteWarning(string.Format("Invalid optional"
                     + " with long name '{0}' has non-unique short"
                     + " name '{1}' already in use by option with long name '{2}'", 
-                    opt.LongName, opt.ShortName, 
-                    Options[opt.ShortName.ToString()].LongName));
+                    optDesc.LongName, optDesc.ShortName, 
+                    OptDescriptors[optDesc.ShortName.ToString()].LongName));
                 return false;
             }
         }
@@ -251,33 +249,32 @@ public class Command {
 
     /**
      * A helper to do some format checking common to all cli arguments.
-     * Should be coupled with some other logic specific to parsedPositionals/parsedOptions.
      *
-     * @param arg: the argument to check
+     * @param argDesc: the descriptor of the argument to check
      * @returns true if valid, false otherwise.
      */
-    private bool ValidArg(ArgDescriptor arg, bool isOption) {
+    private bool ValidArg(ArgDescriptor argDesc, bool isOption) {
 
-        Dictionary<string, ArgDescriptor> argDict = (isOption)  ? Options : Positionals;
+        Dictionary<string, ArgDescriptor> argDescDict = (isOption)  ? OptDescriptors : PosDescriptors;
         
         //long names must be unique
-        if(argDict.ContainsKey(arg.LongName)) {
+        if(argDescDict.ContainsKey(argDesc.LongName)) {
             WriteWarning(string.Format(
                 "Invalid option has duplicate long name '{0}'",
-                arg.LongName));
+                argDesc.LongName));
             return false;
         }
         
         //only chars allowed are [a-z][0-9], '-' and '_' (first letter cant be -)
-        for(int i = 0; i < arg.LongName.Length; i++){
+        for(int i = 0; i < argDesc.LongName.Length; i++){
 
-            char c = arg.LongName[i];
+            char c = argDesc.LongName[i];
 
             if(i == 0 && c == '-') {
                 WriteWarning(string.Format(
                     "Invalid arg with long name '{0}'"
                     + " cannot have long name starting with '-'", 
-                    arg.LongName));
+                    argDesc.LongName));
                 return false;
             }
 
@@ -286,7 +283,7 @@ public class Command {
                 WriteWarning(string.Format(
                     "Invalid arg has long name '{0}' which contains a"
                     + " character other than [a-z][0-9] '-' and '_'.", 
-                    arg.LongName));
+                    argDesc.LongName));
                 return false;
             }
         }
@@ -369,6 +366,13 @@ public class Command {
         public LinkedList<int> argIndexes;
     }
 
+    /**
+     * The main parse method. Parsees tokenized arguments.
+     *
+     * @param args: the tokenized arguments as string[]
+     * @param result: the output ParseResult object (null if failure)
+     * @returns true on success, false otherwise.
+     */
     public bool ParseArgs(string[] args, out ParseResult result) {
 
         result = null;
@@ -407,7 +411,14 @@ public class Command {
         return ok;
     }
 
-    //cateogorizes args into groups of options and args
+    /**
+     * cateogorizes args into groups of options and args, placing them
+     * in the passed in ParseData struct.
+     * 
+     * @param args: the tokenized arguments
+     * @param pd: the ref ParseData for this parse run
+     * @retursn true on success, false otherwise
+     */
     private bool CategorizeArgs(string[] args, ref ParseData pd) {
 
         //skip predicate
@@ -437,7 +448,14 @@ public class Command {
         return true;
     }
 
-    //parse all options
+    /**
+     * parse all options and set the output data after args have
+     * been categorized.
+     *
+     * @param args: the tokenized argument string
+     * @param pd: the ref parse data for this parse run
+     * @returns true on success, false otherwise.
+     */
     private bool ParseOptions(string[] args, ref ParseData pd) {
 
         foreach(int idx in pd.optIndexes) {
@@ -448,7 +466,7 @@ public class Command {
             string optString = args[idx].Substring(nDashes);
 
             bool ok = true;
-            //list of bool parsedOptions
+            //list of bool parsedOptDescriptors
             if(!isLongOpt && optString.Length > 2) {
                 ok = ParseShortOptionChain(optString, ref pd);
             }
@@ -457,15 +475,15 @@ public class Command {
                 return false;
             //simple arg
             else if(!pd.optionsOut[optString].SysType.IsArray){
-                ok = ParseSingleArg(Options[optString], args, optString, idx+1, ref pd);
+                ok = ParseSingleArg(OptDescriptors[optString], args, optString, idx+1, ref pd);
             }
             //array arg
             else {
-                ArgDescriptor opt = Options[optString];
-                if(opt.IsWellDefined)
-                    ok = ParseWellDefinedArrayArg(opt, args, optString, idx+1, ref pd);
+                ArgDescriptor optDesc = OptDescriptors[optString];
+                if(optDesc.IsWellDefined)
+                    ok = ParseWellDefinedArrayArg(optDesc, args, optString, idx+1, ref pd);
                 else {
-                    ok = ParseListArg(opt, args, optString, idx+1, ref pd);
+                    ok = ParseListArg(optDesc, args, optString, idx+1, ref pd);
                 }
             }
 
@@ -476,7 +494,13 @@ public class Command {
         return true;
     }
 
-    //parse string of short names as bool
+    /**
+     * parse string of short names as bool
+     *
+     * @param optString: the tokenized argument string without the leading "-"
+     * @param pd: the ref ParseData for this run
+     * @returns true on success, false otherwise
+     */
     private bool ParseShortOptionChain(string optString, ref ParseData pd) {
 
         for(int j = 0; j < optString.Length; j++) {
@@ -495,10 +519,20 @@ public class Command {
         return true;
     }
 
-    private bool ParseSingleArg(ArgDescriptor arg, string[] args, string argString, 
+    /**
+     * parse string of a single-arg assignment. E.g. parse to type int, float, string, or bool
+     *
+     * @param argDesc: the argument descriptor
+     * @param args: the tokenized string[] of arguments
+     * @param argString: the tokenized argument string without the leading "-"/"--"
+     * @param argIdx: the index of the argument denoted by argString
+     * @param pd: the ref ParseData for this run
+     * @returns true on success, false otherwise
+     */
+    private bool ParseSingleArg(ArgDescriptor argDesc, string[] args, string argString, 
             int argIdx, ref ParseData pd) {
 
-        bool isOpt = (arg as OptionDescriptor != null);
+        bool isOpt = (argDesc as OptionDescriptor != null);
         ArgData argData = (isOpt) ? pd.optionsOut[argString] : pd.positionalsOut[argString];
 
         //gather
@@ -530,22 +564,32 @@ public class Command {
         return true;
     }
 
-    //parses a well-defined array
-    private bool ParseWellDefinedArrayArg(ArgDescriptor arg, string[] args, 
+    /**
+     * parse a well-defined array arg E.g. parse to type int[], float[], string[],
+     * and the argument is "WellDefined" (MinArgs == MaxArgs && MinArgs>0)
+     *
+     * @param argDesc: the argument descriptor
+     * @param args: the tokenized string[] of arguments
+     * @param argString: the name to use to try to reference the argument (long or short name)
+     * @param argIdx: the index of the argument denoted by argString
+     * @param pd: the ref ParseData for this run
+     * @returns true on success, false otherwise
+     */
+    private bool ParseWellDefinedArrayArg(ArgDescriptor argDesc, string[] args, 
             string argString, int argIdx, ref ParseData pd) {
 
         //get args
-        int numArgs = arg.MaxArgs; //should be same as opt.MinArgs
+        int numArgs = argDesc.MaxArgs; //should be same as opt.MinArgs
         string[] arrayArgs;
         bool ok = GatherArgs(args, argIdx, numArgs, ref pd, out arrayArgs);
         if(!ok)
             return false;
 
         //set corresponding output data
-        bool isOpt = (arg as OptionDescriptor != null);
+        bool isOpt = (argDesc as OptionDescriptor != null);
         ArgData argDataOut = (isOpt) ? pd.optionsOut[argString] : pd.positionalsOut[argString];
 
-        if(arg.AppendMode)
+        if(argDesc.AppendMode)
             ok = TryAppendValue(argDataOut, arrayArgs);
         else
             ok = TrySetValue(argDataOut, arrayArgs);
@@ -557,15 +601,25 @@ public class Command {
         return ok;
     }
 
-    //parses a list argument of unkown length
-    private bool ParseListArg(ArgDescriptor arg, string[] args,
+    /**
+     * parse a "list" array arg of unkonw length E.g. parse to type int[], float[], string[],
+     * and the argument is *not* "WellDefined" (MinArgs == MaxArgs && MinArgs>0)
+     *
+     * @param argDesc: the argument descriptor
+     * @param args: the tokenized string[] of arguments
+     * @param argString: the name to use to try to reference the argument (long or short name)
+     * @param argIdx: the index of the argument denoted by argString
+     * @param pd: the ref ParseData for this run
+     * @returns true on success, false otherwise
+     */
+    private bool ParseListArg(ArgDescriptor argDesc, string[] args,
             string argString, int argIdx, ref ParseData pd) {
 
         int startIdx = argIdx;
         int endIdx = startIdx;
 
-        int minArgs = arg.MinArgs;
-        int maxArgs = arg.MaxArgs;
+        int minArgs = argDesc.MinArgs;
+        int maxArgs = argDesc.MaxArgs;
         bool behindDoubleDash = pd.doubleDashIdx > argIdx;
 
         while(endIdx < pd.maxArgIdx && 
@@ -592,11 +646,11 @@ public class Command {
         }
 
         //try set
-        bool isOpt = (arg as OptionDescriptor != null);
+        bool isOpt = (argDesc as OptionDescriptor != null);
         ArgData argDataOut = (isOpt) ? pd.optionsOut[argString] : pd.positionalsOut[argString];
 
         bool ok;
-        if(arg.AppendMode)
+        if(argDesc.AppendMode)
             ok = TryAppendValue(argDataOut, listArgs.ToArray());
         else
             ok = TrySetValue(argDataOut, listArgs.ToArray());
@@ -604,29 +658,37 @@ public class Command {
         return ok;
     }
 
+    /**
+     * parse all positional args and set the output data after args have
+     * been categorized and optional arguments parsed out.
+     *
+     * @param args: the tokenized argument string
+     * @param pd: the ref parse data for this parse run
+     * @returns true on success, false otherwise.
+     */
     private bool ParsePositionals(string[] args, ref ParseData pd) {
 
-        foreach(ArgDescriptor pos in PositionalsList) {
+        foreach(ArgDescriptor posDesc in PosDescriptorsList) {
 
             //no more positionals left
             if(pd.argIndexes.Count == 0)
                 break;
 
-            ArgData posDataOut = pd.positionalsOut[pos.LongName];
+            ArgData posDataOut = pd.positionalsOut[posDesc.LongName];
             bool ok;
 
             //array-type
             if(posDataOut.SysType.IsArray) {
-                if(pos.IsWellDefined) {
-                    ok = ParseWellDefinedArrayArg(pos, args, 
-                            pos.LongName, pd.argIndexes.First.Value, ref pd);
+                if(posDesc.IsWellDefined) {
+                    ok = ParseWellDefinedArrayArg(posDesc, args, 
+                            posDesc.LongName, pd.argIndexes.First.Value, ref pd);
                 }
                 else { //guarenteed this is our last arg (based on addPositional checks)
-                    ok = ParseListArg(pos, args, pos.LongName, pd.argIndexes.First.Value, ref pd);
+                    ok = ParseListArg(posDesc, args, posDesc.LongName, pd.argIndexes.First.Value, ref pd);
                 }
             }
             else{
-                ok = ParseSingleArg(pos, args, pos.LongName, pd.argIndexes.First.Value, ref pd);
+                ok = ParseSingleArg(posDesc, args, posDesc.LongName, pd.argIndexes.First.Value, ref pd);
             }
 
             if(!ok)
@@ -649,6 +711,15 @@ public class Command {
         return true;
     }
 
+    /**
+     * Takes a subcommand and lets the subcommand do its own parse run
+     * for its arguments.
+     *
+     * @param args: the tokenized string array
+     * @param pd: the ref ParseData for this run
+     * @param result: the ParseResult to populate out (null on failure)
+     * @returns true on success, false otherwise.
+     */
     private bool ParseSubCommand(string[] args, 
             ref ParseData pd, out ParseResult result) {
 
@@ -673,7 +744,18 @@ public class Command {
         return true;
     }
 
-    //gathers args necessary
+    /**
+     * tries to gather a requested number arguments, starting at some
+     * index and working forward. Can fail if "-" encountered, end of
+     * line, etc. So that's why we return the status as a bool after the fact.
+     *
+     * @param args: the tokenized argument array
+     * @param argStartIdx: the (inclusive) index to start gathering arguments
+     * @param numArgs: number of arguments to gather
+     * @param pd: the ref ParseData for this run
+     * @param outArgs: the out param of arguments gathered as strings.
+     * @returns true on success, false otherwise.
+     */
     private bool GatherArgs(string[] args, int argStartIdx, 
             int numArgs, ref ParseData pd, out string[] outArgs) {
 
